@@ -609,10 +609,18 @@ function renderRecords(){
         <div class="rec-meta" style="margin-top:3px;font-size:11px">${names}</div>
       </div>
       <div class="rec-amount">NT$${Number(r.amount).toLocaleString()}</div>
-      <button class="rec-edit" onclick="openEditModal('${r._fbKey}')">✏️</button>
-      <button class="rec-del" onclick="deleteRec('${r._fbKey}')">✕</button>
+      <button class="rec-edit" data-key="${r._fbKey}">✏️</button>
+      <button class="rec-del" data-key="${r._fbKey}">✕</button>
     </div>`;
   }).join('');
+
+  // 事件委派：避免 onclick 字串解析問題
+  list.querySelectorAll('.rec-edit').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(btn.dataset.key));
+  });
+  list.querySelectorAll('.rec-del').forEach(btn => {
+    btn.addEventListener('click', () => deleteRec(btn.dataset.key));
+  });
 }
 
 function updateStats(){
