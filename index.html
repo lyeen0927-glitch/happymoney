@@ -616,7 +616,7 @@ function renderRecords(){
 
   // 事件委派：避免 onclick 字串解析問題
   list.querySelectorAll('.rec-edit').forEach(btn => {
-    btn.addEventListener('click', () => openEditModal(btn.dataset.key));
+    btn.addEventListener('click', () => openEdit(btn.dataset.key));
   });
   list.querySelectorAll('.rec-del').forEach(btn => {
     btn.addEventListener('click', () => deleteRec(btn.dataset.key));
@@ -689,98 +689,112 @@ function toast(msg){ const el=document.getElementById('toast'); el.textContent=m
 let editFbKey = null;
 let editSelected = new Set();
 
-function initEditPayer(){
-  const sel=document.getElementById('edit-payer');
-  sel.innerHTML='<option value="">— 請選擇付款人 —</option>';
-  MEMBERS.forEach(m=>{ const o=document.createElement('option'); o.value=m.id; o.textContent=`${m.emoji} ${m.name}`; sel.appendChild(o); });
-}
-
-function renderEditGrid(){
-  const g=document.getElementById('edit-members-grid'); g.innerHTML='';
-  MEMBERS.forEach(m=>{
-    const c=document.createElement('div');
-    c.className='member-chip'+(editSelected.has(m.id)?' selected':'');
-    c.innerHTML=`<div class="av">${m.emoji}</div>${m.name}`;
-    c.onclick=()=>{ editSelected.has(m.id)?editSelected.delete(m.id):editSelected.add(m.id); c.classList.toggle('selected'); updateEditPreview(); };
-    g.appendChild(c);
-  });
-}
-
-function editSelectAll(){ MEMBERS.forEach(m=>editSelected.add(m.id)); renderEditGrid(); updateEditPreview(); }
-function editClearAll(){ editSelected.clear(); renderEditGrid(); updateEditPreview(); }
-
-function updateEditPreview(){
-  const amt=parseFloat(document.getElementById('edit-amount').value)||0;
-  const cnt=editSelected.size;
-  const el=document.getElementById('edit-split-preview');
-  if(!cnt){ el.innerHTML='⚠️ 請至少選擇一位分擔人員'; return; }
-  el.innerHTML=`已選 <span>${cnt} 人</span>，每人應付 <span>NT$${Math.round(amt/cnt).toLocaleString()}</span>`;
-}
-
 function openEdit(fbKey){
-  const r=records.find(r=>r._fbKey===fbKey);
+  const r = records.find(x => x._fbKey === fbKey);
   if(!r){ toast('找不到記錄'); return; }
-  editFbKey=fbKey;
-  initEditPayer();
-  document.getElementById('edit-payer').value=String(r.payerId);
-  document.getElementById('edit-item-name').value=r.itemName||'';
-  document.getElementById('edit-amount').value=r.amount;
-  editSelected=new Set(normalizeMembers(r.members));
+  editFbKey = fbKey;
+
+  const sel = document.getElementById('edit-payer');
+  sel.innerHTML = '';
+  MEMBERS.forEach(m => {
+    const o = document.createElement('option');
+    o.value = String(m.id);
+    o.textContent = m.emoji + ' ' + m.name;
+    if(m.id === Number(r.payerId)) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  document.getElementById('edit-item-name').value = r.itemName || '';
+  document.getElementById('edit-amount').value = r.amount || '';
+  editSelected = new Set(normalizeMembers(r.members));
   renderEditGrid();
   updateEditPreview();
-  document.getElementById('edit-amount').oninput=updateEditPreview;
+  document.getElementById('edit-amount').oninput = updateEditPreview;
   document.getElementById('edit-modal').classList.add('open');
 }
 
 function closeEdit(){
   document.getElementById('edit-modal').classList.remove('open');
-  editFbKey=null;
+  editFbKey = null;
 }
 
 function closeEditIfOverlay(e){
-  if(e.target===document.getElementById('edit-modal')) closeEdit();
+  if(e.target === document.getElementById('edit-modal')) closeEdit();
+}
+
+function renderEditGrid(){
+  const g = document.getElementById('edit-members-grid');
+  g.innerHTML = '';
+  MEMBERS.forEach(m => {
+    const c = document.createElement('div');
+    c.className = 'member-chip' + (editSelected.has(m.id) ? ' selected' : '');
+    c.innerHTML = '<div class="av">' + m.emoji + '</div>' + m.name;
+    c.onclick = () => {
+      editSelected.has(m.id) ? editSelected.delete(m.id) : editSelected.add(m.id);
+      c.classList.toggle('selected');
+      updateEditPreview();
+    };
+    g.appendChild(c);
+  });
+}
+
+function editSelectAll(){ MEMBERS.forEach(m => editSelected.add(m.id)); renderEditGrid(); updateEditPreview(); }
+function editClearAll(){ editSelected.clear(); renderEditGrid(); updateEditPreview(); }
+
+function updateEditPreview(){
+  const amt = parseFloat(document.getElementById('edit-amount').value) || 0;
+  const cnt = editSelected.size;
+  const el = document.getElementById('edit-split-preview');
+  if(!cnt){ el.innerHTML = '⚠️ 請至少選擇一位分擔人員'; return; }
+  el.innerHTML = '已選 <span>' + cnt + ' 人</span>，每人應付 <span>NT$' + Math.round(amt/cnt).toLocaleString() + '</span>';
 }
 
 async function saveEdit(){
-  const payerId=parseInt(document.getElementById('edit-payer').value);
-  const itemName=document.getElementById('edit-item-name').value.trim();
-  const amount=parseFloat(document.getElementById('edit-amount').value);
+  if(!editFbKey){ closeEdit(); return; }
+  const payerId = parseInt(document.getElementById('edit-payer').value);
+  const itemName = document.getElementById('edit-item-name').value.trim();
+  const amount = parseFloat(document.getElementById('edit-amount').value);
   if(!payerId){ toast('請選擇付款人員'); return; }
   if(!itemName){ toast('請輸入品項名稱'); return; }
-  if(!amount||amount<=0){ toast('請輸入有效金額'); return; }
+  if(!amount || amount <= 0){ toast('請輸入有效金額'); return; }
   if(!editSelected.size){ toast('請至少選擇一位分擔人員'); return; }
 
-  const payer=MEMBERS.find(m=>m.id===payerId);
-  const membersArr=[...editSelected].map(Number);
-  const orig=records.find(r=>r._fbKey===editFbKey);
-  const updated={
-    id:orig?.id||Date.now(),
-    time:orig?.time||'',
-    payerId:Number(payerId),
-    payerName:payer.name,
-    itemName,
-    amount:Number(amount),
-    members:membersArr,
-    memberNames:membersArr.map(id=>MEMBERS.find(m=>m.id===id)?.name).join(','),
+  const payer = MEMBERS.find(m => m.id === payerId);
+  const membersArr = [...editSelected].map(Number);
+  const orig = records.find(r => r._fbKey === editFbKey);
+  const updated = {
+    id: orig ? orig.id : Date.now(),
+    time: orig ? orig.time : '',
+    payerId: Number(payerId),
+    payerName: payer.name,
+    itemName: itemName,
+    amount: Number(amount),
+    members: membersArr,
+    memberNames: membersArr.map(id => { const m = MEMBERS.find(m => m.id === id); return m ? m.name : ''; }).join(','),
   };
 
-  const btn=document.querySelector('#edit-modal .btn-save');
-  btn.disabled=true; btn.textContent='儲存中…';
+  const btn = document.querySelector('#edit-modal .btn-save');
+  btn.disabled = true; btn.textContent = '儲存中…';
   try{
-    const res=await fetch(`${FB_URL}/expenses/${editFbKey}.json`,{
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(updated)
+    const res = await fetch(FB_URL + '/expenses/' + editFbKey + '.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(updated)
     });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const idx=records.findIndex(r=>r._fbKey===editFbKey);
-    if(idx>=0) records[idx]={...updated,_fbKey:editFbKey};
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const idx = records.findIndex(r => r._fbKey === editFbKey);
+    if(idx >= 0) records[idx] = Object.assign({}, updated, {_fbKey: editFbKey});
     renderRecords(); updateStats();
     toast('✅ 已更新');
     closeEdit();
-  }catch(e){ toast('❌ 更新失敗：'+e.message); }
-  finally{ btn.disabled=false; btn.textContent='💾 儲存'; }
+  } catch(e){
+    toast('❌ 更新失敗：' + e.message);
+  } finally{
+    btn.disabled = false; btn.textContent = '💾 儲存';
+  }
 }
 
 init();
 </script>
+</body>
+</html>
