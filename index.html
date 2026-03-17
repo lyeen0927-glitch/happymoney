@@ -185,6 +185,16 @@ select option{background:var(--surface2);}
   background:var(--surface2);border-top:1px solid var(--border);}
 .settle-footer b{font-family:'Space Grotesk',sans-serif;font-weight:700;}
 
+/* ── 打勾功能 ── */
+.txn-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);
+  flex-shrink:0;margin-right:10px;cursor:pointer;background:none;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .18s;-webkit-tap-highlight-color:transparent;padding:0;}
+.txn-check:hover{border-color:var(--accent);}
+.txn-check.checked{background:var(--green);border-color:var(--green);color:#0d0f14;font-size:12px;font-weight:700;}
+.settle-txn-row.done{opacity:.4;}
+.settle-txn-row.done .settle-txn-name{text-decoration:line-through;}
+
 .btn-reset{width:100%;background:none;border:1.5px solid rgba(248,113,113,.3);
   color:var(--red);border-radius:8px;padding:11px;font-size:13px;font-weight:600;
   cursor:pointer;font-family:'Noto Sans TC',sans-serif;transition:all .2s;margin-top:8px;}
@@ -266,17 +276,6 @@ select option{background:var(--surface2);}
   font-size:12px;color:var(--text2);background:var(--surface2);border-top:1px solid var(--border);}
 .person-balance-pos{color:var(--green);font-weight:700;font-family:'Space Grotesk',sans-serif;}
 .person-balance-neg{color:var(--red);font-weight:700;font-family:'Space Grotesk',sans-serif;}
-
-/* ── 打勾功能 ── */
-.txn-check{display:flex;align-items:center;justify-content:center;
-  width:24px;height:24px;border-radius:50%;border:2px solid var(--border);
-  cursor:pointer;flex-shrink:0;margin-right:10px;transition:all .2s;
-  background:none;-webkit-tap-highlight-color:transparent;}
-.txn-check:hover{border-color:var(--accent);}
-.txn-check.checked{background:var(--green);border-color:var(--green);}
-.txn-check.checked::after{content:'✓';font-size:13px;color:#0d0f14;font-weight:700;line-height:1;}
-.settle-txn-row.done{opacity:.45;}
-.settle-txn-row.done .settle-txn-name{text-decoration:line-through;}
 
 /* ── 編輯 Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;
@@ -805,24 +804,20 @@ function calcTransactions(){
   return{txns,paid,owed};
 }
 
-// 打勾狀態存在 localStorage
-const CHECKS_KEY = 'settle_checks';
+// 打勾狀態存在 localStorage，key = "from_to_amount"
+const CHECKS_KEY = 'settle_checks_v1';
 function loadChecks(){ try{ return JSON.parse(localStorage.getItem(CHECKS_KEY)||'{}'); }catch{ return {}; } }
 function saveChecks(c){ localStorage.setItem(CHECKS_KEY, JSON.stringify(c)); }
+function txnKey(t){ return t.from+'_'+t.to+'_'+t.amount; }
 
-function txnId(t){ return t.from+'_'+t.to+'_'+t.amount; }
-
-function toggleCheck(id){
+function toggleCheck(key){
   const checks = loadChecks();
-  checks[id] = !checks[id];
+  checks[key] = !checks[key];
   saveChecks(checks);
-  // 更新畫面該筆的樣式，不重繪整個頁面
-  const row = document.querySelector('[data-txn="'+id+'"]');
-  const btn = document.querySelector('[data-check="'+id+'"]');
-  if(row && btn){
-    row.classList.toggle('done', checks[id]);
-    btn.classList.toggle('checked', checks[id]);
-  }
+  const row = document.querySelector('.settle-txn-row[data-key="'+key+'"]');
+  const btn = document.querySelector('.txn-check[data-key="'+key+'"]');
+  if(row) row.classList.toggle('done', !!checks[key]);
+  if(btn){ btn.classList.toggle('checked', !!checks[key]); btn.textContent = checks[key] ? '✓' : ''; }
 }
 
 function renderSettle(){
@@ -845,40 +840,37 @@ function renderSettle(){
 
     const recvRows=myRecv.map(t=>{
       const from=MEMBERS.find(x=>x.id===t.from);
-      const id=txnId(t);
-      const done=checks[id]?'done':'';
-      const chk=checks[id]?'checked':'';
-      return '<div class="settle-txn-row '+done+'" data-txn="'+id+'">' +
-        '<button class="txn-check '+chk+'" data-check="'+id+'" onclick="toggleCheck(''+id+'')"></button>' +
-        '<span class="settle-txn-name">'+(from?from.emoji+' '+from.name:'?')+'</span>' +
-        '<span class="txn-amt-recv">NT$'+t.amount.toLocaleString()+'</span>' +
-        '<span class="settle-tag tag-recv">還款</span>' +
-      '</div>';
+      const k=txnKey(t), done=checks[k]?'done':'', chk=checks[k]?'checked':'';
+      return '<div class="settle-txn-row '+done+'" data-key="'+k+'">'
+        +'<button class="txn-check '+chk+'" data-key="'+k+'" onclick="toggleCheck(''+k+'')">'+(checks[k]?'✓':'')+'</button>'
+        +'<span class="settle-txn-name">'+(from?from.emoji+' '+from.name:'?')+'</span>'
+        +'<span class="txn-amt-recv">NT$'+t.amount.toLocaleString()+'</span>'
+        +'<span class="settle-tag tag-recv">還款</span>'
+        +'</div>';
     }).join('');
 
     const payRows=myPay.map(t=>{
       const to=MEMBERS.find(x=>x.id===t.to);
-      const id=txnId(t);
-      const done=checks[id]?'done':'';
-      const chk=checks[id]?'checked':'';
-      return '<div class="settle-txn-row '+done+'" data-txn="'+id+'">' +
-        '<button class="txn-check '+chk+'" data-check="'+id+'" onclick="toggleCheck(''+id+'')"></button>' +
-        '<span class="settle-txn-name">'+(to?to.emoji+' '+to.name:'?')+'</span>' +
-        '<span class="txn-amt-pay">NT$'+t.amount.toLocaleString()+'</span>' +
-        '<span class="settle-tag tag-pay">匯款</span>' +
-      '</div>';
+      const k=txnKey(t), done=checks[k]?'done':'', chk=checks[k]?'checked':'';
+      return '<div class="settle-txn-row '+done+'" data-key="'+k+'">'
+        +'<button class="txn-check '+chk+'" data-key="'+k+'" onclick="toggleCheck(''+k+'')">'+(checks[k]?'✓':'')+'</button>'
+        +'<span class="settle-txn-name">'+(to?to.emoji+' '+to.name:'?')+'</span>'
+        +'<span class="txn-amt-pay">NT$'+t.amount.toLocaleString()+'</span>'
+        +'<span class="settle-tag tag-pay">匯款</span>'
+        +'</div>';
     }).join('');
 
-    const footer=(myRecv.length||myPay.length)?
-      '<div class="settle-footer">' +
-        (totalRecv?'應收 <b style="color:var(--green)">NT$'+totalRecv.toLocaleString()+'</b>&nbsp;&nbsp;':'') +
-        (totalPay?'應付 <b style="color:var(--accent)">NT$'+totalPay.toLocaleString()+'</b>':'') +
-      '</div>':'';
+    const footer=(myRecv.length||myPay.length)
+      ?'<div class="settle-footer">'
+        +(totalRecv?'應收 <b style="color:var(--green)">NT$'+totalRecv.toLocaleString()+'</b>&nbsp;&nbsp;':'')
+        +(totalPay?'應付 <b style="color:var(--accent)">NT$'+totalPay.toLocaleString()+'</b>':'')
+        +'</div>':'';
 
-    return '<div class="settle-person">' +
-      '<div class="settle-head"><div style="font-size:22px">'+m.emoji+'</div><div class="settle-name">'+m.name+'</div>'+dirHTML+'</div>' +
-      recvRows+payRows+footer+
-    '</div>';
+    return '<div class="settle-person">'
+      +'<div class="settle-head"><div style="font-size:22px">'+m.emoji+'</div>'
+      +'<div class="settle-name">'+m.name+'</div>'+dirHTML+'</div>'
+      +recvRows+payRows+footer
+      +'</div>';
   }).join('');
 }
 
