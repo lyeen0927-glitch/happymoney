@@ -234,6 +234,39 @@ select option{background:var(--surface2);}
   padding:4px;margin-left:4px;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
 .settings-btn:hover{color:var(--accent);}
 
+/* ── 個人支出頁籤 ── */
+.person-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  margin-bottom:10px;overflow:hidden;}
+.person-row-head{padding:13px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;user-select:none;}
+.person-row-head:hover{background:rgba(255,255,255,.02);}
+.person-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:16px;flex-shrink:0;background:linear-gradient(135deg,#667eea,#764ba2);}
+.person-info{flex:1;min-width:0;}
+.person-name{font-size:14px;font-weight:600;}
+.person-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.person-total{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;
+  color:var(--accent);flex-shrink:0;}
+.person-chevron{font-size:12px;color:var(--text3);margin-left:6px;transition:transform .2s;flex-shrink:0;}
+.person-chevron.open{transform:rotate(180deg);}
+.person-detail{display:none;border-top:1px solid var(--border);}
+.person-detail.open{display:block;}
+.person-detail-row{padding:10px 16px 10px 64px;display:flex;align-items:center;
+  border-bottom:1px solid var(--border);font-size:13px;}
+.person-detail-row:last-child{border-bottom:none;}
+.person-detail-name{flex:1;color:var(--text2);}
+.person-detail-type{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;margin-left:6px;flex-shrink:0;}
+.type-paid{background:rgba(74,222,128,.12);color:var(--green);}
+.type-share{background:rgba(245,166,35,.12);color:var(--accent);}
+.person-detail-amt{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;margin-left:10px;flex-shrink:0;}
+.person-bar-wrap{padding:0 16px 12px 16px;}
+.person-bar-bg{background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;}
+.person-bar-fill{height:6px;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s ease;}
+.person-balance-row{padding:10px 16px;display:flex;justify-content:space-between;
+  font-size:12px;color:var(--text2);background:var(--surface2);border-top:1px solid var(--border);}
+.person-balance-pos{color:var(--green);font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.person-balance-neg{color:var(--red);font-weight:700;font-family:'Space Grotesk',sans-serif;}
+
 /* ── 編輯 Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;
   display:flex;align-items:center;justify-content:center;padding:16px;
@@ -284,6 +317,7 @@ select option{background:var(--surface2);}
   <div class="tab active" onclick="switchTab('add')">➕ 新增費用</div>
   <div class="tab" onclick="switchTab('records')">📋 費用記錄</div>
   <div class="tab" onclick="switchTab('settle')">💰 分帳結果</div>
+  <div class="tab" onclick="switchTab('personal')">👤 個人支出</div>
 </div>
 
 <!-- TAB 新增費用 -->
@@ -355,6 +389,11 @@ select option{background:var(--surface2);}
   <button class="settle-btn" onclick="renderSettle()">🔄 計算 / 重新整理</button>
   <div id="settle-content"></div>
   <button class="btn-reset" onclick="resetAll()">🗑️ 清除所有記錄，重新開始</button>
+</div>
+
+<!-- TAB 個人支出 -->
+<div class="page" id="tab-personal">
+  <div id="personal-content"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -604,7 +643,7 @@ async function addRecord(){
     document.getElementById('item-name').value='';
     document.getElementById('amount').value='';
     selectAll();
-    renderRecords(); updateStats();
+    renderRecords(); updateStats(); refreshPersonalIfVisible();
     toast('✅ 已同步至 Firebase');
     switchTab('records');
   }catch(e){ toast('❌ 存入失敗'); setConn('err'); }
@@ -639,11 +678,12 @@ function setConn(state){
 }
 
 function switchTab(t){
-  const keys=['add','records','settle'];
+  const keys=['add','records','settle','personal'];
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',keys[i]===t));
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='settle') renderSettle();
+  if(t==='personal') renderPersonal();
 }
 
 function renderMembersGrid(){
@@ -724,6 +764,11 @@ function updateStats(){
   const vals=Object.values(owedMap).filter(v=>v>0);
   const avg=vals.length>0 ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
   document.getElementById('stat-avg').textContent='NT$'+Math.ceil(avg).toLocaleString();
+  refreshPersonalIfVisible();
+}
+
+function refreshPersonalIfVisible(){
+  if(document.getElementById('tab-personal')?.classList.contains('active')) renderPersonal();
 }
 
 function calcTransactions(){
@@ -766,6 +811,92 @@ function renderSettle(){
     const footer=(myRecv.length||myPay.length)?`<div class="settle-footer">${totalRecv?`應收 <b style="color:var(--green)">NT$${totalRecv.toLocaleString()}</b>&nbsp;&nbsp;`:''}${totalPay?`應付 <b style="color:var(--accent)">NT$${totalPay.toLocaleString()}</b>`:''}</div>`:'';
     return `<div class="settle-person"><div class="settle-head"><div style="font-size:22px">${m.emoji}</div><div class="settle-name">${m.name}</div>${dirHTML}</div>${recvRows}${payRows}${footer}</div>`;
   }).join('');
+}
+
+// ══════════════════════════════════
+//  個人支出頁籤
+// ══════════════════════════════════
+function renderPersonal(){
+  const el = document.getElementById('personal-content');
+  if(!records.length){
+    el.innerHTML = '<div class="empty-state"><div class="icon">👤</div>尚無費用記錄，請先新增費用</div>';
+    return;
+  }
+
+  // 計算每人：已付出、應負擔
+  const paid = {}, owed = {};
+  MEMBERS.forEach(m => { paid[m.id] = 0; owed[m.id] = 0; });
+  records.forEach(r => {
+    const pid = normalizePayer(r);
+    if(paid[pid] !== undefined) paid[pid] += Number(r.amount);
+    const mIds = normalizeMembers(r.members);
+    const sh = Number(r.amount) / (mIds.length || 1);
+    mIds.forEach(id => { if(owed[id] !== undefined) owed[id] += sh; });
+  });
+
+  const maxOwed = Math.max(...MEMBERS.map(m => owed[m.id]), 1);
+
+  el.innerHTML = MEMBERS.map(m => {
+    const paidAmt  = paid[m.id];
+    const owedAmt  = owed[m.id];
+    const balance  = paidAmt - owedAmt;
+    const balHTML  = balance > 0.5
+      ? '結餘 <span class="person-balance-pos">+NT$' + Math.ceil(balance).toLocaleString() + '</span>'
+      : balance < -0.5
+        ? '尚欠 <span class="person-balance-neg">NT$' + Math.ceil(-balance).toLocaleString() + '</span>'
+        : '<span style="color:var(--green)">✅ 帳目已平</span>';
+    const barPct = maxOwed > 0 ? Math.round((owedAmt / maxOwed) * 100) : 0;
+
+    // 明細：此人付的帳 + 被分擔到的帳
+    const payedRows = records
+      .filter(r => normalizePayer(r) === m.id)
+      .map(r => '<div class="person-detail-row">' +
+        '<span class="person-detail-name">' + (r.itemName||'未命名') + '</span>' +
+        '<span class="person-detail-type type-paid">付款</span>' +
+        '<span class="person-detail-amt" style="color:var(--green)">+NT$' + Number(r.amount).toLocaleString() + '</span>' +
+      '</div>').join('');
+
+    const sharedRows = records
+      .filter(r => normalizeMembers(r.members).includes(m.id))
+      .map(r => {
+        const mIds = normalizeMembers(r.members);
+        const sh = Math.ceil(Number(r.amount) / mIds.length);
+        return '<div class="person-detail-row">' +
+          '<span class="person-detail-name">' + (r.itemName||'未命名') + '</span>' +
+          '<span class="person-detail-type type-share">應付</span>' +
+          '<span class="person-detail-amt" style="color:var(--accent)">NT$' + sh.toLocaleString() + '</span>' +
+        '</div>';
+      }).join('');
+
+    return '<div class="person-row">' +
+      '<div class="person-row-head" onclick="togglePersonDetail(this)">' +
+        '<div class="person-av">' + m.emoji + '</div>' +
+        '<div class="person-info">' +
+          '<div class="person-name">' + m.name + '</div>' +
+          '<div class="person-sub">應負擔 NT$' + Math.ceil(owedAmt).toLocaleString() + '　已付 NT$' + Math.ceil(paidAmt).toLocaleString() + '</div>' +
+        '</div>' +
+        '<div class="person-total">NT$' + Math.ceil(owedAmt).toLocaleString() + '</div>' +
+        '<div class="person-chevron">▼</div>' +
+      '</div>' +
+      '<div class="person-bar-wrap" style="padding-top:8px">' +
+        '<div class="person-bar-bg"><div class="person-bar-fill" style="width:' + barPct + '%"></div></div>' +
+      '</div>' +
+      '<div class="person-detail" id="detail-' + m.id + '">' +
+        (payedRows || sharedRows
+          ? payedRows + sharedRows
+          : '<div class="person-detail-row"><span class="person-detail-name" style="color:var(--text3)">此次未參與任何費用</span></div>') +
+        '<div class="person-balance-row"><span>' + balHTML + '</span></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function togglePersonDetail(headEl){
+  const detail = headEl.parentElement.querySelector('.person-detail');
+  const chevron = headEl.querySelector('.person-chevron');
+  const isOpen = detail.classList.contains('open');
+  detail.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
 }
 
 let toastTimer;
