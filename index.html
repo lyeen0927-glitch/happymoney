@@ -267,6 +267,17 @@ select option{background:var(--surface2);}
 .person-balance-pos{color:var(--green);font-weight:700;font-family:'Space Grotesk',sans-serif;}
 .person-balance-neg{color:var(--red);font-weight:700;font-family:'Space Grotesk',sans-serif;}
 
+/* ── 打勾功能 ── */
+.txn-check{display:flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;border:2px solid var(--border);
+  cursor:pointer;flex-shrink:0;margin-right:10px;transition:all .2s;
+  background:none;-webkit-tap-highlight-color:transparent;}
+.txn-check:hover{border-color:var(--accent);}
+.txn-check.checked{background:var(--green);border-color:var(--green);}
+.txn-check.checked::after{content:'✓';font-size:13px;color:#0d0f14;font-weight:700;line-height:1;}
+.settle-txn-row.done{opacity:.45;}
+.settle-txn-row.done .settle-txn-name{text-decoration:line-through;}
+
 /* ── 編輯 Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;
   display:flex;align-items:center;justify-content:center;padding:16px;
@@ -794,22 +805,80 @@ function calcTransactions(){
   return{txns,paid,owed};
 }
 
+// 打勾狀態存在 localStorage
+const CHECKS_KEY = 'settle_checks';
+function loadChecks(){ try{ return JSON.parse(localStorage.getItem(CHECKS_KEY)||'{}'); }catch{ return {}; } }
+function saveChecks(c){ localStorage.setItem(CHECKS_KEY, JSON.stringify(c)); }
+
+function txnId(t){ return t.from+'_'+t.to+'_'+t.amount; }
+
+function toggleCheck(id){
+  const checks = loadChecks();
+  checks[id] = !checks[id];
+  saveChecks(checks);
+  // 更新畫面該筆的樣式，不重繪整個頁面
+  const row = document.querySelector('[data-txn="'+id+'"]');
+  const btn = document.querySelector('[data-check="'+id+'"]');
+  if(row && btn){
+    row.classList.toggle('done', checks[id]);
+    btn.classList.toggle('checked', checks[id]);
+  }
+}
+
 function renderSettle(){
   const el=document.getElementById('settle-content');
   if(!records.length){ el.innerHTML='<div class="empty-state"><div class="icon">💸</div>尚無費用記錄</div>'; return; }
   const{txns,paid,owed}=calcTransactions();
+  const checks=loadChecks();
+
   el.innerHTML=MEMBERS.map(m=>{
-    const myRecv=txns.filter(t=>Number(t.to)===m.id), myPay=txns.filter(t=>Number(t.from)===m.id);
-    const totalRecv=myRecv.reduce((s,t)=>s+t.amount,0), totalPay=myPay.reduce((s,t)=>s+t.amount,0);
+    const myRecv=txns.filter(t=>Number(t.to)===m.id);
+    const myPay =txns.filter(t=>Number(t.from)===m.id);
+    const totalRecv=myRecv.reduce((s,t)=>s+t.amount,0);
+    const totalPay =myPay.reduce((s,t)=>s+t.amount,0);
+
     let dirHTML;
-    if(!myRecv.length&&!myPay.length) dirHTML=`<span class="dir-even">✅ 帳目已平</span>`;
-    else if(myRecv.length&&!myPay.length) dirHTML=`<span class="dir-recv">應收</span>`;
-    else if(!myRecv.length&&myPay.length) dirHTML=`<span class="dir-pay">應付</span>`;
-    else dirHTML=`<span class="dir-recv">應收</span><span style="color:var(--text3);margin:0 4px">/</span><span class="dir-pay">應付</span>`;
-    const recvRows=myRecv.map(t=>{ const from=MEMBERS.find(x=>x.id===t.from); return `<div class="settle-txn-row"><span class="settle-txn-name">${from.emoji} ${from.name}</span><span class="txn-amt-recv">NT$${t.amount.toLocaleString()}</span><span class="settle-tag tag-recv">還款</span></div>`; }).join('');
-    const payRows=myPay.map(t=>{ const to=MEMBERS.find(x=>x.id===t.to); return `<div class="settle-txn-row"><span class="settle-txn-name">${to.emoji} ${to.name}</span><span class="txn-amt-pay">NT$${t.amount.toLocaleString()}</span><span class="settle-tag tag-pay">匯款</span></div>`; }).join('');
-    const footer=(myRecv.length||myPay.length)?`<div class="settle-footer">${totalRecv?`應收 <b style="color:var(--green)">NT$${totalRecv.toLocaleString()}</b>&nbsp;&nbsp;`:''}${totalPay?`應付 <b style="color:var(--accent)">NT$${totalPay.toLocaleString()}</b>`:''}</div>`:'';
-    return `<div class="settle-person"><div class="settle-head"><div style="font-size:22px">${m.emoji}</div><div class="settle-name">${m.name}</div>${dirHTML}</div>${recvRows}${payRows}${footer}</div>`;
+    if(!myRecv.length&&!myPay.length) dirHTML='<span class="dir-even">✅ 帳目已平</span>';
+    else if(myRecv.length&&!myPay.length) dirHTML='<span class="dir-recv">應收</span>';
+    else if(!myRecv.length&&myPay.length) dirHTML='<span class="dir-pay">應付</span>';
+    else dirHTML='<span class="dir-recv">應收</span><span style="color:var(--text3);margin:0 4px">/</span><span class="dir-pay">應付</span>';
+
+    const recvRows=myRecv.map(t=>{
+      const from=MEMBERS.find(x=>x.id===t.from);
+      const id=txnId(t);
+      const done=checks[id]?'done':'';
+      const chk=checks[id]?'checked':'';
+      return '<div class="settle-txn-row '+done+'" data-txn="'+id+'">' +
+        '<button class="txn-check '+chk+'" data-check="'+id+'" onclick="toggleCheck(''+id+'')"></button>' +
+        '<span class="settle-txn-name">'+(from?from.emoji+' '+from.name:'?')+'</span>' +
+        '<span class="txn-amt-recv">NT$'+t.amount.toLocaleString()+'</span>' +
+        '<span class="settle-tag tag-recv">還款</span>' +
+      '</div>';
+    }).join('');
+
+    const payRows=myPay.map(t=>{
+      const to=MEMBERS.find(x=>x.id===t.to);
+      const id=txnId(t);
+      const done=checks[id]?'done':'';
+      const chk=checks[id]?'checked':'';
+      return '<div class="settle-txn-row '+done+'" data-txn="'+id+'">' +
+        '<button class="txn-check '+chk+'" data-check="'+id+'" onclick="toggleCheck(''+id+'')"></button>' +
+        '<span class="settle-txn-name">'+(to?to.emoji+' '+to.name:'?')+'</span>' +
+        '<span class="txn-amt-pay">NT$'+t.amount.toLocaleString()+'</span>' +
+        '<span class="settle-tag tag-pay">匯款</span>' +
+      '</div>';
+    }).join('');
+
+    const footer=(myRecv.length||myPay.length)?
+      '<div class="settle-footer">' +
+        (totalRecv?'應收 <b style="color:var(--green)">NT$'+totalRecv.toLocaleString()+'</b>&nbsp;&nbsp;':'') +
+        (totalPay?'應付 <b style="color:var(--accent)">NT$'+totalPay.toLocaleString()+'</b>':'') +
+      '</div>':'';
+
+    return '<div class="settle-person">' +
+      '<div class="settle-head"><div style="font-size:22px">'+m.emoji+'</div><div class="settle-name">'+m.name+'</div>'+dirHTML+'</div>' +
+      recvRows+payRows+footer+
+    '</div>';
   }).join('');
 }
 
