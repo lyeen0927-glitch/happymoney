@@ -491,7 +491,10 @@ let MEMBERS = (() => {
 function init(){
   // 載入標題
   const savedTitle = localStorage.getItem(TITLE_KEY);
-  if(savedTitle) document.getElementById('header-title').textContent = savedTitle;
+  if(savedTitle){
+    document.getElementById('header-title').textContent = savedTitle;
+    document.title = savedTitle;
+  }
 
   MEMBERS.forEach(m=>selected.add(m.id));
   refreshPayerSelect();
@@ -970,6 +973,7 @@ function startEditTitle(){
     const val = inp.value.trim() || current;
     h1.textContent = val;
     localStorage.setItem(TITLE_KEY, val);
+    document.title = val;
     inp.remove();
     h1.style.display = '';
     wrap.querySelector('.title-edit-btn').style.display = '';
