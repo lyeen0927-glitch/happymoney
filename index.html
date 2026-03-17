@@ -196,6 +196,44 @@ select option{background:var(--surface2);}
   transition:transform .3s;z-index:999;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 
+/* ── 標題編輯 ── */
+.header-title-wrap{display:flex;align-items:center;gap:6px;}
+.title-edit-btn{background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;
+  padding:2px 4px;border-radius:4px;transition:color .15s;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
+.title-edit-btn:hover{color:var(--accent);}
+.title-input{background:transparent;border:none;border-bottom:1.5px solid var(--accent);
+  color:var(--text);font-size:16px;font-weight:700;font-family:'Noto Sans TC',sans-serif;
+  outline:none;width:180px;padding:2px 0;}
+
+/* ── 人員管理列表 ── */
+.member-manage-row{display:flex;align-items:center;gap:8px;padding:10px 0;
+  border-bottom:1px solid var(--border);}
+.member-manage-row:last-child{border-bottom:none;}
+.member-emoji-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:6px 10px;font-size:18px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.member-name-input{flex:1;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);padding:8px 12px;font-size:14px;
+  font-family:'Noto Sans TC',sans-serif;outline:none;}
+.member-name-input:focus{border-color:var(--accent);}
+.member-del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;
+  padding:4px 8px;border-radius:6px;transition:color .15s,background .15s;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;}
+.member-del-btn:hover{color:var(--red);background:rgba(248,113,113,.1);}
+.btn-add-member{width:100%;background:rgba(245,166,35,.08);border:1.5px dashed rgba(245,166,35,.4);
+  color:var(--accent);border-radius:8px;padding:10px;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:'Noto Sans TC',sans-serif;margin-top:12px;transition:all .2s;
+  -webkit-tap-highlight-color:transparent;}
+.btn-add-member:hover{background:rgba(245,166,35,.15);}
+.emoji-picker{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:8px;margin-top:6px;}
+.emoji-opt{font-size:20px;text-align:center;cursor:pointer;padding:4px;border-radius:4px;
+  transition:background .15s;-webkit-tap-highlight-color:transparent;}
+.emoji-opt:hover{background:rgba(255,255,255,.1);}
+.settings-btn{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;
+  padding:4px;margin-left:4px;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
+.settings-btn:hover{color:var(--accent);}
+
 /* ── 編輯 Modal ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;
   display:flex;align-items:center;justify-content:center;padding:16px;
@@ -224,10 +262,14 @@ select option{background:var(--surface2);}
 
 <header>
   <div class="logo">🏠</div>
-  <div>
-    <h1>楊梅包棟分帳系統</h1>
-    <p>Firebase 即時同步版 · 13 人同行</p>
+  <div style="flex:1;min-width:0;">
+    <div class="header-title-wrap">
+      <h1 id="header-title">楊梅包棟分帳系統</h1>
+      <button class="title-edit-btn" onclick="startEditTitle()" title="編輯標題">✏️</button>
+    </div>
+    <p id="header-sub">Firebase 即時同步版 · <span id="member-count">13</span> 人同行</p>
   </div>
+  <button class="settings-btn" onclick="openMemberModal()" title="管理人員">⚙️</button>
   <div id="conn-dot" class="conn-dot" title="連線狀態"></div>
   <span class="conn-label" id="conn-label">未連線</span>
 </header>
@@ -317,6 +359,27 @@ select option{background:var(--surface2);}
 
 <div class="toast" id="toast"></div>
 
+<!-- 人員管理 Modal -->
+<div class="modal-overlay" id="member-modal" onclick="closeMemberModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>⚙️ 人員管理</h3>
+      <button class="modal-close" onclick="closeMemberModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="member-manage-list"></div>
+      <div id="emoji-picker-wrap" style="display:none">
+        <div class="emoji-picker" id="emoji-picker"></div>
+      </div>
+      <button class="btn-add-member" onclick="addNewMember()">＋ 新增成員</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeMemberModal()">取消</button>
+      <button class="btn-save" onclick="saveMemberChanges()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 編輯 Modal -->
 <div class="modal-overlay" id="edit-modal" onclick="closeEditIfOverlay(event)">
   <div class="modal">
@@ -365,7 +428,7 @@ let records = [];
 let selected = new Set();
 let unsubscribe = null;
 
-const MEMBERS = [
+const DEFAULT_MEMBERS = [
   { id:1,  name:'采玲 Grace',   emoji:'🎁' },
   { id:2,  name:'Carson',       emoji:'🧑' },
   { id:3,  name:'chun',         emoji:'🌿' },
@@ -376,20 +439,42 @@ const MEMBERS = [
   { id:8,  name:'Ashley',       emoji:'🌺' },
   { id:9,  name:'林家宏',       emoji:'🏔️' },
   { id:10, name:'洪奕鎮',       emoji:'🎨' },
-  { id:11, name:'王乃皜', emoji:'🍀' },
+  { id:11, name:'王乃皜',       emoji:'🍀' },
   { id:12, name:'許迦智',       emoji:'🦁' },
   { id:13, name:'吳佳盈',       emoji:'🌼' },
 ];
+const MEMBERS_KEY = 'split_members';
+const TITLE_KEY   = 'split_title';
+let MEMBERS = (() => {
+  try { const d=localStorage.getItem(MEMBERS_KEY); return d?JSON.parse(d):[...DEFAULT_MEMBERS]; }
+  catch{ return [...DEFAULT_MEMBERS]; }
+})();
 
 function init(){
+  // 載入標題
+  const savedTitle = localStorage.getItem(TITLE_KEY);
+  if(savedTitle) document.getElementById('header-title').textContent = savedTitle;
+
   MEMBERS.forEach(m=>selected.add(m.id));
-  const sel=document.getElementById('payer');
-  MEMBERS.forEach(m=>{ const o=document.createElement('option'); o.value=m.id; o.textContent=`${m.emoji} ${m.name}`; sel.appendChild(o); });
+  refreshPayerSelect();
   renderMembersGrid();
+  updateMemberCount();
   updatePreview();
   document.getElementById('amount').addEventListener('input', updatePreview);
   document.getElementById('setup-card').style.display='none';
   startRealtimeSync();
+}
+
+function refreshPayerSelect(){
+  const sel=document.getElementById('payer');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">— 請選擇付款人 —</option>';
+  MEMBERS.forEach(m=>{ const o=document.createElement('option'); o.value=m.id; o.textContent=m.emoji+' '+m.name; sel.appendChild(o); });
+  if(prev) sel.value=prev;
+}
+
+function updateMemberCount(){
+  document.getElementById('member-count').textContent = MEMBERS.length;
 }
 
 function saveFirebaseUrl(){
@@ -577,7 +662,7 @@ function updatePreview(){
   const amt=parseFloat(document.getElementById('amount').value)||0, cnt=selected.size;
   const el=document.getElementById('split-preview');
   if(!cnt){ el.innerHTML='⚠️ 請至少選擇一位分擔人員'; return; }
-  el.innerHTML=`已選 <span>${cnt} 人</span>，每人應付 <span>NT$${Math.round(amt/cnt).toLocaleString()}</span>`;
+  el.innerHTML=`已選 <span>${cnt} 人</span>，每人應付 <span>NT$${Math.ceil(amt/cnt).toLocaleString()}</span>`;
 }
 
 // ── Firebase 回傳 array 會變成 {0:x,1:y} 物件，需正規化 ──
@@ -601,7 +686,7 @@ function renderRecords(){
     const payer=MEMBERS.find(m=>m.id===pid);
     const mIds=normalizeMembers(r.members);
     const names=mIds.map(id=>MEMBERS.find(m=>m.id===id)?.name).filter(Boolean).join('、');
-    const each=mIds.length>0?Math.round(Number(r.amount)/mIds.length):0;
+    const each=mIds.length>0?Math.ceil(Number(r.amount)/mIds.length):0;
     return `<div class="record-item">
       <div class="rec-av">${payer?.emoji||'?'}</div>
       <div class="rec-info">
@@ -638,7 +723,7 @@ function updateStats(){
   // 平均每人 = 有分擔到費用的人的平均應付
   const vals=Object.values(owedMap).filter(v=>v>0);
   const avg=vals.length>0 ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
-  document.getElementById('stat-avg').textContent='NT$'+Math.round(avg).toLocaleString();
+  document.getElementById('stat-avg').textContent='NT$'+Math.ceil(avg).toLocaleString();
 }
 
 function calcTransactions(){
@@ -657,7 +742,7 @@ function calcTransactions(){
   const txns=[]; let i=0,j=0;
   while(i<creditors.length&&j<debtors.length){
     const amt=Math.min(creditors[i].bal,debtors[j].bal);
-    if(amt>0.5) txns.push({from:debtors[j].id,to:creditors[i].id,amount:Math.round(amt)});
+    if(amt>0.5) txns.push({from:debtors[j].id,to:creditors[i].id,amount:Math.ceil(amt)});
     creditors[i].bal-=amt; debtors[j].bal-=amt;
     if(creditors[i].bal<0.5) i++; if(debtors[j].bal<0.5) j++;
   }
@@ -685,6 +770,143 @@ function renderSettle(){
 
 let toastTimer;
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2800); }
+
+// ══════════════════════════════════
+//  標題編輯
+// ══════════════════════════════════
+function startEditTitle(){
+  const h1 = document.getElementById('header-title');
+  const current = h1.textContent;
+  const wrap = h1.parentElement;
+  h1.style.display = 'none';
+  wrap.querySelector('.title-edit-btn').style.display = 'none';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'title-input';
+  inp.value = current;
+  wrap.insertBefore(inp, h1);
+  inp.focus(); inp.select();
+
+  const done = () => {
+    const val = inp.value.trim() || current;
+    h1.textContent = val;
+    localStorage.setItem(TITLE_KEY, val);
+    inp.remove();
+    h1.style.display = '';
+    wrap.querySelector('.title-edit-btn').style.display = '';
+  };
+  inp.addEventListener('blur', done);
+  inp.addEventListener('keydown', e => { if(e.key==='Enter') inp.blur(); if(e.key==='Escape'){ inp.value=current; inp.blur(); } });
+}
+
+// ══════════════════════════════════
+//  人員管理 Modal
+// ══════════════════════════════════
+const EMOJIS = ['😀','😎','🤓','😊','🙂','😄','😤','🧐','😁','🥰','😏','🤩','🧔','💁','🎁','🧑','🌿','👩','🌊','🌸','👨','🌺','🏔️','🎨','🍀','🦁','🌼','⭐','🎯','🎪','🦊','🐼','🦋','🌈','🍕','☕','🎸','🏄'];
+let draftMembers = [];
+let emojiTargetIdx = null;
+
+function openMemberModal(){
+  draftMembers = MEMBERS.map(m => ({...m}));
+  renderMemberList();
+  document.getElementById('emoji-picker-wrap').style.display = 'none';
+  document.getElementById('member-modal').classList.add('open');
+}
+
+function closeMemberModal(){
+  document.getElementById('member-modal').classList.remove('open');
+  emojiTargetIdx = null;
+}
+
+function closeMemberModalOverlay(e){
+  if(e.target === document.getElementById('member-modal')) closeMemberModal();
+}
+
+function renderMemberList(){
+  const list = document.getElementById('member-manage-list');
+  list.innerHTML = '';
+  draftMembers.forEach((m, idx) => {
+    const row = document.createElement('div');
+    row.className = 'member-manage-row';
+    row.innerHTML =
+      '<button class="member-emoji-btn" data-idx="'+idx+'" title="換 emoji">'+m.emoji+'</button>' +
+      '<input class="member-name-input" type="text" value="'+m.name+'" data-idx="'+idx+'" placeholder="輸入姓名">' +
+      '<button class="member-del-btn" data-idx="'+idx+'" title="刪除">🗑️</button>';
+    list.appendChild(row);
+  });
+
+  list.querySelectorAll('.member-emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleEmojiPicker(parseInt(btn.dataset.idx), btn));
+  });
+  list.querySelectorAll('.member-name-input').forEach(inp => {
+    inp.addEventListener('input', () => { draftMembers[parseInt(inp.dataset.idx)].name = inp.value; });
+  });
+  list.querySelectorAll('.member-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(draftMembers.length <= 1){ toast('至少要保留一位成員'); return; }
+      draftMembers.splice(parseInt(btn.dataset.idx), 1);
+      renderMemberList();
+    });
+  });
+}
+
+function toggleEmojiPicker(idx, anchorBtn){
+  const wrap = document.getElementById('emoji-picker-wrap');
+  if(emojiTargetIdx === idx && wrap.style.display !== 'none'){
+    wrap.style.display = 'none'; emojiTargetIdx = null; return;
+  }
+  emojiTargetIdx = idx;
+
+  // 建立 emoji 格
+  const picker = document.getElementById('emoji-picker');
+  picker.innerHTML = '';
+  EMOJIS.forEach(e => {
+    const d = document.createElement('div');
+    d.className = 'emoji-opt'; d.textContent = e;
+    d.addEventListener('click', () => {
+      draftMembers[emojiTargetIdx].emoji = e;
+      wrap.style.display = 'none'; emojiTargetIdx = null;
+      renderMemberList();
+    });
+    picker.appendChild(d);
+  });
+
+  // 把 picker 插到該行下方
+  const row = anchorBtn.closest('.member-manage-row');
+  row.parentElement.insertBefore(wrap, row.nextSibling);
+  wrap.style.display = 'block';
+}
+
+function addNewMember(){
+  const newId = Date.now();
+  draftMembers.push({ id: newId, name: '', emoji: '😀' });
+  renderMemberList();
+  // focus 最後一個 input
+  const inputs = document.querySelectorAll('#member-manage-list .member-name-input');
+  if(inputs.length) inputs[inputs.length-1].focus();
+}
+
+function saveMemberChanges(){
+  // 驗證：名字不能空白
+  const invalid = draftMembers.filter(m => !m.name.trim());
+  if(invalid.length){ toast('請填寫所有成員姓名'); return; }
+
+  MEMBERS = draftMembers.map(m => ({...m, name: m.name.trim()}));
+  localStorage.setItem(MEMBERS_KEY, JSON.stringify(MEMBERS));
+
+  // 更新 selected（移除已刪除的成員）
+  const ids = new Set(MEMBERS.map(m => m.id));
+  for(const id of selected) if(!ids.has(id)) selected.delete(id);
+  MEMBERS.forEach(m => selected.add(m.id)); // 新增成員預設全選
+
+  refreshPayerSelect();
+  renderMembersGrid();
+  updateMemberCount();
+  updateStats();
+  closeMemberModal();
+  toast('✅ 人員設定已儲存');
+}
 
 // ── 編輯功能 ──
 let editFbKey = null;
@@ -747,7 +969,7 @@ function updateEditPreview(){
   const cnt = editSelected.size;
   const el = document.getElementById('edit-split-preview');
   if(!cnt){ el.innerHTML = '⚠️ 請至少選擇一位分擔人員'; return; }
-  el.innerHTML = '已選 <span>' + cnt + ' 人</span>，每人應付 <span>NT$' + Math.round(amt/cnt).toLocaleString() + '</span>';
+  el.innerHTML = '已選 <span>' + cnt + ' 人</span>，每人應付 <span>NT$' + Math.ceil(amt/cnt).toLocaleString() + '</span>';
 }
 
 async function saveEdit(){
