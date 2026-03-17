@@ -333,20 +333,7 @@ select option{background:var(--surface2);}
 <!-- TAB 新增費用 -->
 <div class="page active" id="tab-add">
 
-  <div class="setup-card" id="setup-card">
-    <h3>🔥 第一步：設定 Firebase 資料庫網址</h3>
-    <p>請先完成以下設定，再開始使用：</p>
-    <p>
-      1. 前往 <a href="https://console.firebase.google.com" target="_blank" style="color:#60a5fa">Firebase Console</a> → 建立新專案<br>
-      2. 左側點「Realtime Database」→「建立資料庫」→ 選<code>測試模式</code><br>
-      3. 複製資料庫網址（格式：<code>https://你的專案-default-rtdb.firebaseio.com</code>）<br>
-      4. 貼到下方後儲存，即可開始使用（所有人即時同步）
-    </p>
-    <div class="setup-input">
-      <input type="text" id="fb-url-input" placeholder="https://你的專案-default-rtdb.firebaseio.com">
-      <button onclick="saveFirebaseUrl()">儲存</button>
-    </div>
-  </div>
+
 
   <div class="card">
     <div class="card-header">
@@ -472,7 +459,9 @@ select option{background:var(--surface2);}
 //  不需要 SDK，直接用 fetch 呼叫
 // ════════════════════════════════════════════
 const FB_KEY = 'firebase_db_url';
-let FB_URL = 'https://havefun-318dd-default-rtdb.firebaseio.com';
+// 強制寫死，清除任何舊的 localStorage 設定
+localStorage.removeItem(FB_KEY);
+const FB_URL = 'https://havefun-318dd-default-rtdb.firebaseio.com';
 let records = [];
 let selected = new Set();
 let unsubscribe = null;
@@ -510,7 +499,6 @@ function init(){
   updateMemberCount();
   updatePreview();
   document.getElementById('amount').addEventListener('input', updatePreview);
-  document.getElementById('setup-card').style.display='none';
   startRealtimeSync();
 }
 
@@ -526,13 +514,6 @@ function updateMemberCount(){
   document.getElementById('member-count').textContent = MEMBERS.length;
 }
 
-function saveFirebaseUrl(){
-  const v=document.getElementById('fb-url-input').value.trim().replace(/\/$/,'');
-  if(!v||!v.startsWith('https://')){ toast('請輸入正確的 Firebase 網址'); return; }
-  FB_URL=v; localStorage.setItem(FB_KEY,v);
-  document.getElementById('setup-card').style.display='none';
-  startRealtimeSync(); toast('✅ 已連線 Firebase，即時同步啟動！');
-}
 
 // ── Firebase REST API ──
 function dbUrl(path=''){ return `${FB_URL}/expenses${path}.json`; }
